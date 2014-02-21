@@ -24,9 +24,6 @@ class DataStore(object):
       feed etc 
     * always use JSON for metadata
 
-    Only opens the underlying data source when absolutely necessary 
-    (by minimising the time the data source is open, we can minimise
-    the chance of data being corrupted if another process changes it).
     """
     pass
 
@@ -42,7 +39,6 @@ class HDFDataStore(DataStore):
             i.e. crops the data non-destructively.
         """
         self.store = pd.HDFStore(filename)
-        self.store.close()
         self.start_date = pd.Timestamp(start_date) if start_date else None
         self.end_date = pd.Timestamp(end_date) if end_date else None
 
@@ -97,6 +93,12 @@ class HDFDataStore(DataStore):
             data = data.index
         return data
     
+    def close(self):
+        self.store.close()
+
+    def open(self):
+        self.store.close()
+
     def table_has_column_names(self, key, cols):
         """
         Parameters
@@ -153,7 +155,6 @@ class HDFDataStore(DataStore):
         self._check_key(key)
         storer = self._get_storer(key)
         col_names = storer.non_index_axes[0][1:][0]
-        self.store.close()
         return col_names
     
     def nrows(self, key, start_date=None, end_date=None, apply_mask=True):
@@ -164,13 +165,11 @@ class HDFDataStore(DataStore):
             terms = date_range_to_terms(start_date, end_date)
             if terms == []:
                 terms = None
-            self.store.open()
             coords = self.store.select_as_coordinates(key, terms)
             nrows_ = len(coords)
         else:
             storer = self._get_storer(key)
             nrows_ = storer.nrows
-            self.store.close()
         return nrows_
     
     def restrict_start_and_end_dates(self, start_date=None, end_date=None):
@@ -196,25 +195,18 @@ class HDFDataStore(DataStore):
         (start_date, end_date)
         """
         self._check_key(key)
-        self.store.open()
         start_date = self.store.select(key, [0]).index[0]
         end_date = self.store.select(key, start=-1).index[0]
-        self.store.close()
         if apply_mask:
             start_date, end_date = self.restrict_start_and_end_dates(start_date,
                                                                      end_date)
         return start_date, end_date
     
     def keys(self):
-        self.store.open()
-        keys = self.store.keys()
-        self.store.close()
-        return keys
+        return self.store.keys()
 
     def _get_storer(self, key):
-        """Caller must close store."""
         self._check_key(key)
-        self.store.open()
         storer = self.store.get_storer(key)
         assert storer is not None, "cannot get storer for key = " + key
         return storer

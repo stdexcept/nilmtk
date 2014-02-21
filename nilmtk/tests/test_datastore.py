@@ -12,11 +12,16 @@ class TestHDFDataStore(unittest.TestCase):
     NROWS = 1E4
     END_DATE = START_DATE + timedelta(seconds=NROWS-1)
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         filename = join(data_dir(), 'random.h5')
-        self.datastore = HDFDataStore(filename)
-        self.keys = ['/building1/utility/electric/meter{:d}'.format(i) 
-                     for i in range(1,6)]
+        cls.datastore = HDFDataStore(filename)
+        cls.keys = ['/building1/utility/electric/meter{:d}'.format(i) 
+                    for i in range(1,6)]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.datastore.close()
 
     def test_keys(self):
         self.assertEqual(self.datastore.keys(), self.keys)
