@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import pandas as pd
+from nilmtk.timeframe import TimeFrame, EmptyIntersectError
 
 MAX_MEM_ALLOWANCE_IN_BYTES = 1E9
 
@@ -24,25 +25,24 @@ class DataStore(object):
       feed etc 
     * always use JSON for metadata
 
+    Attributes
+    ----------
+    mask : nilmtk.TimeFrame
     """
-    pass
-
+    def __init__(self):
+        self.mask = TimeFrame()
 
 class HDFDataStore(DataStore):
-    def __init__(self, filename, start_date=None, end_date=None):
+    def __init__(self, filename):
         """
         Parameters
         ----------
         filename : string
-        start_date, end_date : pd.Timestamp or string, optional
-            Defines a "region of interest", 
-            i.e. crops the data non-destructively.
         """
         self.store = pd.HDFStore(filename)
-        self.start_date = pd.Timestamp(start_date) if start_date else None
-        self.end_date = pd.Timestamp(end_date) if end_date else None
+        super(HDFDataStore, self).__init__()
 
-    def load(self, key, cols=None, start_date=None, end_date=None):
+    def load(self, key, cols=None, timeframe=None):
         """
         Parameters
         ----------
@@ -54,8 +54,8 @@ class HDFDataStore(DataStore):
         cols : list or 'index', optional
             e.g. [('power', 'active'), ('power', 'reactive'), ('voltage', '')]
             if not provided then will return all columns from the table.
-        start_date, end_date : string or pd.Timestamp, optional
-            defines the time period to load as range (start_date, end_date]
+        timeframe : nilmtk.TimeFrame, optional
+            defines the time period to load
 
         Returns
         ------- 
@@ -67,32 +67,38 @@ class HDFDataStore(DataStore):
         MemoryError if we try to load too much data.
         """
         self._check_key(key)
-        start_date, end_date = self.restrict_start_and_end_dates(start_date, 
-                                                                 end_date)
+        self._check_columns(key, cols)
+        timeframe = TimeFrame() if timeframe is None else timeframe
+        try:
+            timeframe = timeframe.intersect(self.mask)
+        except EmptyIntersectError:
+            return pd.DataFrame()
         
+        # Check we won't use too much memory
+        mem_requirement = self.estimate_memory_requirement(key, cols, timeframe)
+        if mem_requirement > MAX_MEM_ALLOWANCE_IN_BYTES:
+            raise MemoryError('Requested data would use too much memory.')
+
         # Create list of query terms
-        terms = date_range_to_terms(start_date, end_date)
+        terms = timeframe.query_terms
         if cols is not None:
-            if not self.table_has_column_names(key, cols):
-                raise KeyError('at least one of ' + str(cols) + 
-                               ' is not a valid column')
             terms.append("columns==cols")
         if terms == []:
             terms = None
-        
-        # Check we won't use too much memory
-        mem_requirement = self.estimate_memory_requirement(key, cols, 
-                                                           start_date, end_date)
-        if mem_requirement > MAX_MEM_ALLOWANCE_IN_BYTES:
-            raise MemoryError('Requested data would use too much memory.')
-        
+                
         # Read data
-        self.store.open()
-        data = self.store.select(key=key, where=terms, auto_close=True)
+        data = self.store.select(key=key, where=terms)
         if cols == 'index':
             data = data.index
         return data
     
+    def _check_columns(self, key, columns):
+        if columns is None:
+            return
+        if not self.table_has_column_names(key, columns):
+            raise KeyError('at least one of ' + str(columns) + 
+                           ' is not a valid column')
+
     def close(self):
         self.store.close()
 
@@ -109,6 +115,7 @@ class HDFDataStore(DataStore):
         -------
         boolean
         """
+        assert cols is not None
         self._check_key(key)
         if isinstance(cols, str):
             cols = [cols]
@@ -116,37 +123,37 @@ class HDFDataStore(DataStore):
         table_cols = set(self.column_names(key) + ['index'])
         return query_cols.issubset(table_cols)
     
-    def get_generator(self, key, periods=None, cols=None):
+    def generator(self, key, cols=None, periods=None):
         """
         Parameters
         ----------
-        periods : list of (start_date, end_date) tuples, optional
-            e.g. [("2013-01-01", "2013-02-01"), ("2013-02-01", "2013-03-01")]
-            
+        periods : list of TimeFrames, optional
         """
         
         # TODO: this would be much more efficient 
         # if we first got row indicies for each period,
         # then checked each period will fit into memory,
         # and then iterated over the row indicies.      
-        self._check_key(key)  
+        self._check_key(key)
+        self._check_columns(key, cols)
         if periods is None:
-            periods = [self.date_range(key)]
-        for start_date, end_date in periods:
-            data = self.load(key, cols, start_date, end_date)
+            periods = [self.timeframe(key)]
+        for timeframe in periods:
+            data = self.load(key=key, cols=cols, timeframe=timeframe)
             if not data.empty:
                 yield data
     
-    def estimate_memory_requirement(self, key, cols=None, start_date=None, 
-                                    end_date=None, apply_mask=True):
+    def estimate_memory_requirement(self, key, cols=None, timeframe=None):
         """Returns estimated mem requirement in bytes."""
         BYTES_PER_ELEMENT = 4
         BYTES_PER_TIMESTAMP = 8
         self._check_key(key)
         if cols is None:
             cols = self.column_names(key)
+        else:
+            self._check_columns(key, cols)
         ncols = len(cols)
-        nrows = self.nrows(key, start_date, end_date, apply_mask=apply_mask)
+        nrows = self.nrows(key, timeframe)
         est_mem_usage_for_data = nrows * ncols * BYTES_PER_ELEMENT
         est_mem_usage_for_index = nrows * BYTES_PER_TIMESTAMP
         return est_mem_usage_for_data + est_mem_usage_for_index
@@ -157,50 +164,32 @@ class HDFDataStore(DataStore):
         col_names = storer.non_index_axes[0][1:][0]
         return col_names
     
-    def nrows(self, key, start_date=None, end_date=None, apply_mask=True):
+    def nrows(self, key, timeframe=None):
         self._check_key(key)
-        if apply_mask:
-            start_date, end_date = self.restrict_start_and_end_dates(start_date, end_date)
-        if start_date or end_date:
-            terms = date_range_to_terms(start_date, end_date)
+        timeframe = TimeFrame() if timeframe is None else timeframe
+        timeframe = self.mask.intersect(timeframe)
+        if timeframe:
+            terms = timeframe.query_terms
             if terms == []:
                 terms = None
             coords = self.store.select_as_coordinates(key, terms)
-            nrows_ = len(coords)
+            nrows = len(coords)
         else:
             storer = self._get_storer(key)
-            nrows_ = storer.nrows
-        return nrows_
-    
-    def restrict_start_and_end_dates(self, start_date=None, end_date=None):
-        if start_date:
-            start_date = pd.Timestamp(start_date)
-        if end_date:
-            end_date = pd.Timestamp(end_date)
-            
-        if all([start_date, self.start_date]) and start_date < self.start_date:
-            start_date = self.start_date
-        elif start_date is None:
-            start_date = self.start_date
-        if all([end_date, self.end_date]) and end_date > self.end_date:
-            end_date = self.end_date
-        elif end_date is None:
-            end_date = self.end_date
-        return start_date, end_date
-    
-    def date_range(self, key, apply_mask=True):
+            nrows = storer.nrows
+        return nrows
+        
+    def timeframe(self, key):
         """
         Returns
         -------
-        (start_date, end_date)
+        nilmtk.TimeFrame
         """
         self._check_key(key)
-        start_date = self.store.select(key, [0]).index[0]
-        end_date = self.store.select(key, start=-1).index[0]
-        if apply_mask:
-            start_date, end_date = self.restrict_start_and_end_dates(start_date,
-                                                                     end_date)
-        return start_date, end_date
+        start = self.store.select(key, [0]).index[0]
+        end = self.store.select(key, start=-1).index[0]
+        timeframe = TimeFrame(start, end)
+        return self.mask.intersect(timeframe)
     
     def keys(self):
         return self.store.keys()
@@ -214,33 +203,3 @@ class HDFDataStore(DataStore):
     def _check_key(self, key):
         if key not in self.keys():
             raise KeyError(key + ' not in store')
-
-
-def date_range_to_terms(start_date=None, end_date=None):
-    terms = []
-    if start_date is not None:
-        terms.append("index>=start_date")
-    if end_date is not None:
-        terms.append("index<end_date")
-    return terms
-
-# SIMPLE TESTS:
-# ds = HDFDataStore('../data/random.h5',
-#         start_date='2012-01-01 00:00:30', end_date='2012-01-01 00:00:59')
-# KEY = '/building1/utility/electric/meter1'
-# print('columns =', ds.column_names(KEY))
-# print('date range (with region of interest applied) = \n', ds.date_range(KEY))
-# print('date range (with region of interest lifted) = \n', ds.date_range(KEY, apply_mask=False))
-# print('number of rows (ROI applied) =', ds.nrows(KEY))
-# print('number of rows (ROI lifted) =', ds.nrows(KEY, apply_mask=False))
-# print('estimated memory requirement for all data (ROI applied) = {:.1f} MBytes'
-#       .format(ds.estimate_memory_requirement(KEY) / 1E6))
-# print('estimated memory requirement for all data (ROI lifted)  = {:.1f} MBytes'
-#       .format(ds.estimate_memory_requirement(KEY, apply_mask=False) / 1E6))
-# ds.load(KEY, start_date='2012-01-01 00:00:00', 
-#         end_date='2012-01-01 00:00:05', 
-#         cols=[('power', 'active')])
-# for chunk in ds.get_generator(KEY, [
-#         ("2012-01-01 00:00:00", "2012-01-01 00:00:10"), 
-#         ("2012-01-01 00:00:50", "2012-01-01 00:00:59")]):
-#     print('start = ', chunk.index[0], '; end =', chunk.index[-1])
