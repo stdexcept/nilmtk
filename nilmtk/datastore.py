@@ -70,7 +70,7 @@ class HDFDataStore(DataStore):
         ------
         MemoryError if we try to load too much data.
         """
-
+        self._check_key(key)
         start_date, end_date = self.restrict_start_and_end_dates(start_date, 
                                                                  end_date)
         
@@ -107,6 +107,7 @@ class HDFDataStore(DataStore):
         -------
         boolean
         """
+        self._check_key(key)
         if isinstance(cols, str):
             cols = [cols]
         query_cols = set(cols)
@@ -125,9 +126,10 @@ class HDFDataStore(DataStore):
         # TODO: this would be much more efficient 
         # if we first got row indicies for each period,
         # then checked each period will fit into memory,
-        # and then iterated over the row indicies.        
+        # and then iterated over the row indicies.      
+        self._check_key(key)  
         if periods is None:
-            periods = [self.date_range()]
+            periods = [self.date_range(key)]
         for start_date, end_date in periods:
             data = self.load(key, cols, start_date, end_date)
             if not data.empty:
@@ -138,6 +140,7 @@ class HDFDataStore(DataStore):
         """Returns estimated mem requirement in bytes."""
         BYTES_PER_ELEMENT = 4
         BYTES_PER_TIMESTAMP = 8
+        self._check_key(key)
         if cols is None:
             cols = self.column_names(key)
         ncols = len(cols)
@@ -147,12 +150,14 @@ class HDFDataStore(DataStore):
         return est_mem_usage_for_data + est_mem_usage_for_index
     
     def column_names(self, key):
+        self._check_key(key)
         storer = self._get_storer(key)
         col_names = storer.non_index_axes[0][1:][0]
         self.store.close()
         return col_names
     
     def nrows(self, key, start_date=None, end_date=None, apply_mask=True):
+        self._check_key(key)
         if apply_mask:
             start_date, end_date = self.restrict_start_and_end_dates(start_date, end_date)
         if start_date or end_date:
@@ -190,6 +195,7 @@ class HDFDataStore(DataStore):
         -------
         (start_date, end_date)
         """
+        self._check_key(key)
         self.store.open()
         start_date = self.store.select(key, [0]).index[0]
         end_date = self.store.select(key, start=-1).index[0]
@@ -207,8 +213,10 @@ class HDFDataStore(DataStore):
 
     def _get_storer(self, key):
         """Caller must close store."""
+        self._check_key(key)
         self.store.open()
         storer = self.store.get_storer(key)
+        assert storer is not None, "cannot get storer for key = " + key
         return storer
     
     def _check_key(self, key):
@@ -225,22 +233,22 @@ def date_range_to_terms(start_date=None, end_date=None):
     return terms
 
 # SIMPLE TESTS:
-ds = HDFDataStore('../data/random.h5',
-        start_date='2012-01-01 00:00:30', end_date='2012-01-01 00:00:59')
-KEY = '/building1/utility/electric/meter1'
-print('columns =', ds.column_names(KEY))
-print('date range (with region of interest applied) = \n', ds.date_range(KEY))
-print('date range (with region of interest lifted) = \n', ds.date_range(KEY, apply_mask=False))
-print('number of rows (ROI applied) =', ds.nrows(KEY))
-print('number of rows (ROI lifted) =', ds.nrows(KEY, apply_mask=False))
-print('estimated memory requirement for all data (ROI applied) = {:.1f} MBytes'
-      .format(ds.estimate_memory_requirement(KEY) / 1E6))
-print('estimated memory requirement for all data (ROI lifted)  = {:.1f} MBytes'
-      .format(ds.estimate_memory_requirement(KEY, apply_mask=False) / 1E6))
-ds.load(KEY, start_date='2012-01-01 00:00:00', 
-        end_date='2012-01-01 00:00:05', 
-        cols=[('power', 'active')])
-for chunk in ds.get_generator(KEY, [
-        ("2012-01-01 00:00:00", "2012-01-01 00:00:10"), 
-        ("2012-01-01 00:00:50", "2012-01-01 00:00:59")]):
-    print('start = ', chunk.index[0], '; end =', chunk.index[-1])
+# ds = HDFDataStore('../data/random.h5',
+#         start_date='2012-01-01 00:00:30', end_date='2012-01-01 00:00:59')
+# KEY = '/building1/utility/electric/meter1'
+# print('columns =', ds.column_names(KEY))
+# print('date range (with region of interest applied) = \n', ds.date_range(KEY))
+# print('date range (with region of interest lifted) = \n', ds.date_range(KEY, apply_mask=False))
+# print('number of rows (ROI applied) =', ds.nrows(KEY))
+# print('number of rows (ROI lifted) =', ds.nrows(KEY, apply_mask=False))
+# print('estimated memory requirement for all data (ROI applied) = {:.1f} MBytes'
+#       .format(ds.estimate_memory_requirement(KEY) / 1E6))
+# print('estimated memory requirement for all data (ROI lifted)  = {:.1f} MBytes'
+#       .format(ds.estimate_memory_requirement(KEY, apply_mask=False) / 1E6))
+# ds.load(KEY, start_date='2012-01-01 00:00:00', 
+#         end_date='2012-01-01 00:00:05', 
+#         cols=[('power', 'active')])
+# for chunk in ds.get_generator(KEY, [
+#         ("2012-01-01 00:00:00", "2012-01-01 00:00:10"), 
+#         ("2012-01-01 00:00:50", "2012-01-01 00:00:59")]):
+#     print('start = ', chunk.index[0], '; end =', chunk.index[-1])
