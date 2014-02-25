@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import pandas as pd
-from nilmtk.timeframe import TimeFrame, EmptyIntersectError
+from nilmtk.timeframe import TimeFrame
 
 MAX_MEM_ALLOWANCE_IN_BYTES = 1E9
 
@@ -107,9 +107,8 @@ class HDFDataStore(DataStore):
         self._check_key(key)
         self._check_columns(key, cols)
         window = TimeFrame() if window is None else window
-        try:
-            window = window.intersect(self.window)
-        except EmptyIntersectError:
+        window = window.intersect(self.window)
+        if window.empty:
             return pd.DataFrame()
         
         # Check we won't use too much memory
