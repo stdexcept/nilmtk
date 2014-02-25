@@ -8,11 +8,18 @@ class TestTimeFrame(unittest.TestCase):
     def test_date_setting(self):
         TimeFrame()
         TimeFrame("2012-01-01", "2013-01-01")
-        TimeFrame("2012-01-01", "2012-01-01")
+
+        # test identical start and end dates
+        with self.assertRaises(ValueError):
+            TimeFrame("2012-01-01", "2012-01-01")
+
         TimeFrame(start="2011-01-01")
         TimeFrame(end="2011-01-01")
+
+        # test end date after start date
         with self.assertRaises(ValueError):
             TimeFrame("2012-01-01", "2011-01-01")
+
         tf = TimeFrame()
         tf.end = "2011-01-01"
         tf.start = "2010-01-01"

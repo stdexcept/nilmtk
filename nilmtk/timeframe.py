@@ -44,7 +44,7 @@ class TimeFrame(object):
             self._start = None
             return
         new_start = pd.Timestamp(new_start)
-        if self.end and new_start > self.end:
+        if self.end and new_start >= self.end:
             raise ValueError("start date must be before end date")
         else:
             self._start = new_start
@@ -55,7 +55,7 @@ class TimeFrame(object):
             self._end = None
             return
         new_end = pd.Timestamp(new_end)
-        if self.start and new_end < self.start:
+        if self.start and new_end <= self.start:
             raise ValueError("end date must be after start date")
         else:
             self._end = new_end
@@ -94,7 +94,7 @@ class TimeFrame(object):
             empty = False
 
             if (start is not None) and (end is not None):
-                if start > end:
+                if start >= end:
                     start = None
                     end = None
                     empty = True
