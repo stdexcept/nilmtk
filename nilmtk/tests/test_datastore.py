@@ -36,46 +36,46 @@ class TestHDFDataStore(unittest.TestCase):
                               ('voltage', '')])
 
     def test_timeframe(self):
-        self.datastore.mask.clear()
+        self.datastore.window.clear()
         for key in self.keys:
             self.assertEqual(self.datastore.timeframe(key), self.TIMEFRAME)
 
         self._apply_mask()
         for key in self.keys:
-            self.datastore.mask.enabled = False
+            self.datastore.window.enabled = False
             self.assertEqual(self.datastore.timeframe(key), self.TIMEFRAME)
-            self.datastore.mask.enabled = True
-            self.assertEqual(self.datastore.timeframe(key), self.datastore.mask)
+            self.datastore.window.enabled = True
+            self.assertEqual(self.datastore.timeframe(key), self.datastore.window)
 
     def test_n_rows(self):
         self._apply_mask()
         for key in self.keys:
-            self.datastore.mask.enabled = True
+            self.datastore.window.enabled = True
             self.assertEqual(self.datastore.nrows(key), 10*60)
-            self.datastore.mask.enabled = False
+            self.datastore.window.enabled = False
             self.assertEqual(self.datastore.nrows(key), self.NROWS)
 
     def test_estimate_memory_requirement(self):
         self._apply_mask()
         for key in self.keys:
-            self.datastore.mask.enabled = True
+            self.datastore.window.enabled = True
             mem = self.datastore.estimate_memory_requirement(key)
             self.assertEqual(mem, 12000)
-            self.datastore.mask.enabled = False
+            self.datastore.window.enabled = False
             mem = self.datastore.estimate_memory_requirement(key)
             self.assertEqual(mem, 200000)
 
     def test_load(self):
         timeframe = TimeFrame('2012-01-01 00:00:00', '2012-01-01 00:00:05')
-        self.datastore.mask.clear()
+        self.datastore.window.clear()
         df = self.datastore.load(key=self.keys[0], 
                                  cols=[('power', 'active')],
-                                 timeframe=timeframe)
+                                 window=timeframe)
         self.assertEqual(df.index[0], timeframe.start)
         self.assertEqual(df.index[-1], timeframe.end - timedelta(seconds=1))
 
     def test_generator(self):
-        self.datastore.mask.clear()
+        self.datastore.window.clear()
         chunks = self.datastore.generator(self.keys[0])
         i = 0
         for chunk in chunks:
@@ -97,8 +97,7 @@ class TestHDFDataStore(unittest.TestCase):
         self.assertEqual(i, 2)
 
         # Check when we have a narrow mask
-        self.datastore.mask = TimeFrame('2012-01-01 00:10:02', '2012-01-01 00:10:10')
-        print("now")
+        self.datastore.window = TimeFrame('2012-01-01 00:10:02', '2012-01-01 00:10:10')
         chunks = self.datastore.generator(self.keys[0], periods=timeframes)
         i = 0
         for chunk in chunks:
@@ -112,7 +111,7 @@ class TestHDFDataStore(unittest.TestCase):
     #--------- helper functions ---------------------#
 
     def _apply_mask(self):
-        self.datastore.mask = TimeFrame('2012-01-01 00:10:00',
+        self.datastore.window = TimeFrame('2012-01-01 00:10:00',
                                         '2012-01-01 00:20:00')
 
     

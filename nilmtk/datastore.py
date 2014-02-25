@@ -27,10 +27,10 @@ class DataStore(object):
 
     Attributes
     ----------
-    mask : nilmtk.TimeFrame
+    window : nilmtk.TimeFrame
     """
     def __init__(self):
-        self.mask = TimeFrame()
+        self.window = TimeFrame()
 
 class HDFDataStore(DataStore):
     def __init__(self, filename):
@@ -42,7 +42,7 @@ class HDFDataStore(DataStore):
         self.store = pd.HDFStore(filename)
         super(HDFDataStore, self).__init__()
 
-    def load(self, key, cols=None, timeframe=None):
+    def load(self, key, cols=None, window=None):
         """
         Parameters
         ----------
@@ -54,7 +54,7 @@ class HDFDataStore(DataStore):
         cols : list or 'index', optional
             e.g. [('power', 'active'), ('power', 'reactive'), ('voltage', '')]
             if not provided then will return all columns from the table.
-        timeframe : nilmtk.TimeFrame, optional
+        window : nilmtk.TimeFrame, optional
             defines the time period to load
 
         Returns
@@ -68,24 +68,24 @@ class HDFDataStore(DataStore):
         """
         self._check_key(key)
         self._check_columns(key, cols)
-        timeframe = TimeFrame() if timeframe is None else timeframe
+        window = TimeFrame() if window is None else window
         try:
-            timeframe = timeframe.intersect(self.mask)
+            window = window.intersect(self.window)
         except EmptyIntersectError:
             return pd.DataFrame()
         
         # Check we won't use too much memory
-        mem_requirement = self.estimate_memory_requirement(key, cols, timeframe)
+        mem_requirement = self.estimate_memory_requirement(key, cols, window)
         if mem_requirement > MAX_MEM_ALLOWANCE_IN_BYTES:
             raise MemoryError('Requested data would use too much memory.')
 
         # Create list of query terms
-        terms = timeframe.query_terms
+        terms = window.query_terms('window')
         if cols is not None:
             terms.append("columns==cols")
         if terms == []:
             terms = None
-                
+
         # Read data
         data = self.store.select(key=key, where=terms)
         if cols == 'index':
@@ -139,7 +139,7 @@ class HDFDataStore(DataStore):
         if periods is None:
             periods = [self.timeframe(key)]
         for timeframe in periods:
-            data = self.load(key=key, cols=cols, timeframe=timeframe)
+            data = self.load(key=key, cols=cols, window=timeframe)
             if not data.empty:
                 yield data
     
@@ -167,9 +167,9 @@ class HDFDataStore(DataStore):
     def nrows(self, key, timeframe=None):
         self._check_key(key)
         timeframe = TimeFrame() if timeframe is None else timeframe
-        timeframe = self.mask.intersect(timeframe)
+        timeframe = self.window.intersect(timeframe)
         if timeframe:
-            terms = timeframe.query_terms
+            terms = timeframe.query_terms()
             if terms == []:
                 terms = None
             coords = self.store.select_as_coordinates(key, terms)
@@ -189,7 +189,7 @@ class HDFDataStore(DataStore):
         start = self.store.select(key, [0]).index[0]
         end = self.store.select(key, start=-1).index[0]
         timeframe = TimeFrame(start, end)
-        return self.mask.intersect(timeframe)
+        return self.window.intersect(timeframe)
     
     def keys(self):
         return self.store.keys()

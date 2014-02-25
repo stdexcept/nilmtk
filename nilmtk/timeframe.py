@@ -87,13 +87,12 @@ class TimeFrame(object):
         
         return TimeFrame(start, end)
 
-    @property
-    def query_terms(self):
+    def query_terms(self, variable_name='timeframe'):
         terms = []
         if self.start is not None:
-            terms.append("index>=timeframe.start")
+            terms.append("index>=" + variable_name + ".start")
         if self.end is not None:
-            terms.append("index<timeframe.end")
+            terms.append("index<" + variable_name + ".end")
         return terms
 
     def clear(self):

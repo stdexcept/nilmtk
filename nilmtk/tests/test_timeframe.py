@@ -56,6 +56,16 @@ class TestTimeFrame(unittest.TestCase):
         self.assertEqual(new_tf, disjoint)
         tf.enabled = True
 
+        # crop into the start of tf
+        new_start = "2012-01-05 04:05:06"
+        new_tf = tf.intersect(TimeFrame(start=new_start, end="2014-01-01"))
+        self.assertEqual(new_tf, TimeFrame(start=new_start, end=tf.end))
+
+        # crop into the end of tf
+        new_end = "2012-01-07 04:05:06"
+        new_tf = tf.intersect(TimeFrame(start="2011-01-01", end=new_end))
+        self.assertEqual(new_tf, TimeFrame(start=tf.start, end=new_end))
+        
 
 if __name__ == '__main__':
     unittest.main()
