@@ -76,7 +76,7 @@ class TestHDFDataStore(unittest.TestCase):
 
     def test_generator(self):
         self.datastore.window.clear()
-        chunks = self.datastore.generator(self.keys[0])
+        chunks = self.datastore.load_chunks(self.keys[0])
         i = 0
         for chunk in chunks:
             i += 1
@@ -87,7 +87,7 @@ class TestHDFDataStore(unittest.TestCase):
 
         timeframes = [TimeFrame('2012-01-01 00:00:00', '2012-01-01 00:00:05'),
                       TimeFrame('2012-01-01 00:10:00', '2012-01-01 00:10:05')]
-        chunks = self.datastore.generator(self.keys[0], periods=timeframes)
+        chunks = self.datastore.load_chunks(self.keys[0], periods=timeframes)
         i = 0
         for chunk in chunks:
             self.assertEqual(chunk.index[0], timeframes[i].start)
@@ -98,14 +98,17 @@ class TestHDFDataStore(unittest.TestCase):
 
         # Check when we have a narrow mask
         self.datastore.window = TimeFrame('2012-01-01 00:10:02', '2012-01-01 00:10:10')
-        chunks = self.datastore.generator(self.keys[0], periods=timeframes)
+        chunks = self.datastore.load_chunks(self.keys[0], periods=timeframes)
         i = 0
         for chunk in chunks:
-            self.assertEqual(chunk.index[0], pd.Timestamp('2012-01-01 00:10:02'))
-            self.assertEqual(chunk.index[-1], pd.Timestamp('2012-01-01 00:10:04'))
-            self.assertEqual(len(chunk), 3)
+            if i == 0:
+                self.assertTrue(chunk.empty)
+            else:
+                self.assertEqual(chunk.index[0], pd.Timestamp('2012-01-01 00:10:02'))
+                self.assertEqual(chunk.index[-1], pd.Timestamp('2012-01-01 00:10:04'))
+                self.assertEqual(len(chunk), 3)
             i += 1
-        self.assertEqual(i, 1)
+        self.assertEqual(i, 2)
 
 
     #--------- helper functions ---------------------#

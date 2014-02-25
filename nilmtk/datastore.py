@@ -42,6 +42,40 @@ class HDFDataStore(DataStore):
         self.store = pd.HDFStore(filename)
         super(HDFDataStore, self).__init__()
 
+    def load_chunks(self, key, cols=None, periods=None):
+        """
+        Parameters
+        ----------
+        key : string, the location of a table within the DataStore.
+            The hierarchical structure of key is standardised across NILMTK
+            e.g. 'building1/utility/electric/meter4'. Or, if the physical
+            store only represents, say, a single house then the path is
+            truncated to 'utility/electric/meter4'.  
+        cols : list or 'index', optional
+            e.g. [('power', 'active'), ('power', 'reactive'), ('voltage', '')]
+            if not provided then will return all columns from the table.
+        periods : list of TimeFrames, optional
+            each period defines the time period to load.  
+            If `self.window` is enabled then `window` will be
+            intersected with `self.window`.
+
+        Returns
+        -------
+        generator of DataFrame objects.
+        """
+        
+        # TODO: this would be much more efficient 
+        # if we first got row indicies for each period,
+        # then checked each period will fit into memory,
+        # and then iterated over the row indicies.      
+        self._check_key(key)
+        self._check_columns(key, cols)
+        if periods is None:
+            periods = [self.timeframe(key)]
+        for timeframe in periods:
+            data = self.load(key=key, cols=cols, window=timeframe)
+            yield data
+
     def load(self, key, cols=None, window=None):
         """
         Parameters
@@ -55,12 +89,16 @@ class HDFDataStore(DataStore):
             e.g. [('power', 'active'), ('power', 'reactive'), ('voltage', '')]
             if not provided then will return all columns from the table.
         window : nilmtk.TimeFrame, optional
-            defines the time period to load
+            defines the time period to load.  If `self.window` is enabled
+            then `window` will be intersected with `self.window`.
 
         Returns
         ------- 
         If `cols=='index'` then returns a pd.DatetimeIndex
-        else returns a pd.DataFrame
+        else returns a pd.DataFrame.
+        Returns an empty DataFrame if no data is available for the
+        specified window (or if the window.intersect(self.window)
+        is empty).
 
         Raises
         ------
@@ -122,26 +160,6 @@ class HDFDataStore(DataStore):
         query_cols = set(cols)
         table_cols = set(self.column_names(key) + ['index'])
         return query_cols.issubset(table_cols)
-    
-    def generator(self, key, cols=None, periods=None):
-        """
-        Parameters
-        ----------
-        periods : list of TimeFrames, optional
-        """
-        
-        # TODO: this would be much more efficient 
-        # if we first got row indicies for each period,
-        # then checked each period will fit into memory,
-        # and then iterated over the row indicies.      
-        self._check_key(key)
-        self._check_columns(key, cols)
-        if periods is None:
-            periods = [self.timeframe(key)]
-        for timeframe in periods:
-            data = self.load(key=key, cols=cols, window=timeframe)
-            if not data.empty:
-                yield data
     
     def estimate_memory_requirement(self, key, cols=None, timeframe=None):
         """Returns estimated mem requirement in bytes."""
