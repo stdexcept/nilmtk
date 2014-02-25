@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 import unittest
 import pandas as pd
-from nilmtk.timeframe import TimeFrame, EmptyIntersectError
+from nilmtk.timeframe import TimeFrame
 
 class TestTimeFrame(unittest.TestCase):
     def test_date_setting(self):
@@ -55,6 +55,10 @@ class TestTimeFrame(unittest.TestCase):
 
         disjoint = TimeFrame("2015-01-01", "2016-01-01")
         new_tf = tf.intersect(disjoint)
+        self.assertTrue(new_tf.empty)
+
+        # try intersecting with emtpy TF
+        new_tf = tf.intersect(new_tf)
         self.assertTrue(new_tf.empty)
 
         disjoint = TimeFrame("2015-01-01", "2016-01-01")
