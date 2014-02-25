@@ -57,4 +57,4 @@ class Node(object):
         # check_preconditions again??? (in case this node is not run in
         # the context of a Pipeline?)
         # do stuff to df
-        pass
+        return df

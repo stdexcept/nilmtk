@@ -16,7 +16,7 @@ class Results(object):
     ----------
     _data : DataFrame
         Index is period start.  
-        Columns are: end_date and any columns for internal storage of stats.
+        Columns are: `end` and any columns for internal storage of stats.
     """
     __metaclass__ = abc.ABCMeta
 

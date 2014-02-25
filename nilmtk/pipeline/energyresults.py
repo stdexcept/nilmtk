@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import copy
 from nilmtk import TimeFrame
+from nilmtk.consts import POWER_NAMES
 
 class EnergyResults(Results):
     """
@@ -29,8 +30,7 @@ class EnergyResults(Results):
         """Append a single result.
         e.g. append(TimeFrame(start, end), apparent=34, active=43)
         """
-        allowed_columns = ['active', 'apparent', 'reactive']
-        if set(kwargs.keys()) - set(allowed_columns):
+        if set(kwargs.keys()) - set(POWER_NAMES):
             raise KeyError('kwargs must be a combination of '+
                            str(allowed_columns))
         super(EnergyResults, self).append(timeframe, **kwargs)
