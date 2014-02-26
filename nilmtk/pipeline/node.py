@@ -1,4 +1,5 @@
 import abc
+from contract import UnsatisfiedPreconditionsError
 
 class Node(object):
     """Abstract class defining interface for all Node subclasses,
@@ -8,22 +9,18 @@ class Node(object):
 
     __metaclass__ = abc.ABCMeta
 
-    postconditions =  {} # TODO
-
     def __init__(self, name):
         self.name = name
 
-    @abc.abstractmethod
     def check_preconditions(conditions):
-        """ Static method
-
+        """
         Parameters
         ----------
-        conditions : dict
+        conditions : nilmtk.Contract
         
-        Returns
-        -------
-        boolean
+        Raises
+        ------
+        UnsatistfiedPreconditionsError
         
         Description
         -----------
@@ -46,11 +43,16 @@ class Node(object):
         haven't then raise an error to tell the user to add a
         BookendGapsWithZeros node.)
         """
-        # TODO: see if there are any unsatisfied preconditions
-        # if there are then raise an UnsatisfiedPreconditionsError
-        # giving the exact precondition that failed, why it failed
-        # which node is complaining, and suggestions for how to fix it
-        pass
+        # If a subclass has complex rules for preconditions then
+        # override this default method definition.
+        unsatisfied_conditions = preconditions.unsatisfied_conditions(conditions)
+        if unsatisfied_conditions:
+            msg = str(self) + " not satisfied by:\n"
+            msg += unsatisfied_conditions
+            raise UnsatisfiedPreconditionsError(msg)
+            
+    def __repr__(self):
+        return self.__class__.__name__ + ' ' + self.name
 
     @abc.abstractmethod
     def process(self, df):
