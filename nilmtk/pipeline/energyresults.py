@@ -32,7 +32,7 @@ class EnergyResults(Results):
         """
         if set(kwargs.keys()) - set(POWER_NAMES):
             raise KeyError('kwargs must be a combination of '+
-                           str(allowed_columns))
+                           str(POWER_NAMES))
         super(EnergyResults, self).append(timeframe, **kwargs)
 
     def update(self, new_result):

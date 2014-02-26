@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import pandas as pd
+from copy import deepcopy
 
 class TimeFrame(object):
     """A TimeFrame is a single time span or period,
@@ -70,6 +71,9 @@ class TimeFrame(object):
         this TimeFrame and `other` TimeFrame.
         If the intersect is empty then the returned TimeFrame
         will have empty == True."""
+        if other is None:
+            return deepcopy(self)
+
         assert isinstance(other, TimeFrame)
 
         if self.empty or other.empty:

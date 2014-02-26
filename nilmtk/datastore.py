@@ -106,18 +106,20 @@ class HDFDataStore(DataStore):
         """
         self._check_key(key)
         self._check_columns(key, cols)
-        window = TimeFrame() if window is None else window
-        window = window.intersect(self.window)
-        if window.empty:
+        window_intersect = self.window.intersect(window)
+        if window_intersect.empty:
             return pd.DataFrame()
         
         # Check we won't use too much memory
-        mem_requirement = self.estimate_memory_requirement(key, cols, window)
+        mem_requirement = self.estimate_memory_requirement(key, cols, 
+                                                           window_intersect)
         if mem_requirement > MAX_MEM_ALLOWANCE_IN_BYTES:
-            raise MemoryError('Requested data would use too much memory.')
+            raise MemoryError('Requested data would use {:.3f}MBytes:'
+                              ' too much memory.'
+                              .format(mem_requirement / 1E6))
 
         # Create list of query terms
-        terms = window.query_terms('window')
+        terms = window_intersect.query_terms('window_intersect')
         if cols is not None:
             terms.append("columns==cols")
         if terms == []:
@@ -182,11 +184,17 @@ class HDFDataStore(DataStore):
         return col_names
     
     def nrows(self, key, timeframe=None):
+        """
+        Returns
+        -------
+        nrows : int
+        """
         self._check_key(key)
-        timeframe = TimeFrame() if timeframe is None else timeframe
-        timeframe = self.window.intersect(timeframe)
-        if timeframe:
-            terms = timeframe.query_terms()
+        timeframe_intersect = self.window.intersect(timeframe)
+        if timeframe_intersect.empty:
+            nrows = 0
+        elif timeframe_intersect:
+            terms = timeframe_intersect.query_terms('timeframe_intersect')
             if terms == []:
                 terms = None
             coords = self.store.select_as_coordinates(key, terms)
@@ -203,9 +211,9 @@ class HDFDataStore(DataStore):
         nilmtk.TimeFrame
         """
         self._check_key(key)
-        start = self.store.select(key, [0]).index[0]
-        end = self.store.select(key, start=-1).index[0]
-        timeframe = TimeFrame(start, end)
+        data_start_date = self.store.select(key, [0]).index[0]
+        data_end_date = self.store.select(key, start=-1).index[0]
+        timeframe = TimeFrame(data_start_date, data_end_date)
         return self.window.intersect(timeframe)
     
     def keys(self):
